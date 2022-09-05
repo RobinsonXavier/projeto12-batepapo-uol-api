@@ -138,13 +138,29 @@ app.post("/status", async (req, res) => {
             return;
         }
         const update = await db.collection('participants').updateOne({_id: ObjectId(validUser._id)}, {$set: updatedUser});
+        res.sendStatus(200);
     } catch (error) {
         console.log(error.message);
         res.sendStatus(500);
     }
 
-
 });
+
+setInterval(app.delete('/participants', async (req, res) => {
+    try {
+        const users = await db.collection('participants').find().toArray();
+        const dUsers = users.filter(user => {
+           Date.now() - user.lastStatus > 10
+        });
+        for (let i = 0; i < dUsers.length; i++) {
+            await db.collection('participants').deleteOne({_id: new ObjectId(dUsers[0]._id)});      
+        }
+
+    } catch (error) {
+        console.log(error.message);
+        res.sendStatus(500);
+    }
+}))
 
 app.listen(5000, () => {
     console.log('Server on');
