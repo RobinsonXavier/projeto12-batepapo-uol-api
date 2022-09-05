@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import { MongoClient } from 'mongodb';
+import dayjs from 'dayjs';
+import joi from 'joi';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -15,6 +17,16 @@ let db;
 
 mongoClient.connect(()=> {
     db = mongoClient.db('batepapouol')
+});
+
+const participantsSchema = joi.object({
+    name: joi.string().required()
+});
+
+const messageSchema = joi.object({
+    to: joi.string().required(),
+    text: joi.string().required(),
+    type: joi.string().valid('message', 'private-message').required()
 });
 
 app.get("/participants", async (req, res) => {
@@ -32,6 +44,19 @@ app.get("/messages", async (req, res) => {
 
         const limit = parseInt(req.query.limit);
 
+        if (limit) {
+
+            try {
+                const messages = await db.collection("messages").find().toArray();
+                messages.slice(-limit);
+                res.send(messages);
+            } catch (error) {
+                console.log(error.message);
+                res.sendStatus(500);
+            }
+            return;
+        }
+
         try {
 
             const messages = await db.collection("messages").find().toArray();
@@ -46,6 +71,14 @@ app.post("/participants", async (req, res) => {
 
     const {name} = req.body; //strings não vazio
     const lastStatus = Date.now();
+
+    const validation = participantsSchema.validate(req.body, {abortEarly: false});
+
+    if(validation.error) {
+        const errors = validation.error.details.map(detail => detail.message);
+        res.status(422).send(errors);
+        return;
+    }
     
     try {
         const response = await db.collection('participants').insertOne({name, lastStatus});
@@ -58,17 +91,33 @@ app.post("/participants", async (req, res) => {
 
 app.post("/messages", async (req, res) => {
 
-    const {to, text, type} = req.body; //string não vazias, type só pode ser ´message'ou 'private-message'
-    const {User} = req.header;
+    const {to, text, type} = req.body; 
+    const user = req.headers.user;
+    const timeNow = dayjs().format('HH:mm:ss');
 
+    const validation = messageSchema.validate(req.body, {abortEarly: false});
+
+    const validFrom = db.collection('participants').findOne({name: user});
+
+    if (validation.error) {
+        const errors = validation.error.details.map( detail => detail.message);
+        res.status(422).send(errors);
+        return;
+    }
+
+    if (!validFrom) {
+        res.status(422);
+        return;
+    }
 
     try {
         const response = await db.collection('messages').insertOne(
             {
-                from: User,
+                from: user,
                 to,
                 text,
-                type
+                type,
+                time : timeNow
             });
         res.sendStatus(201);
     } catch (error) {
