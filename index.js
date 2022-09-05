@@ -30,6 +30,16 @@ app.get("/participants", async (req, res) => {
 
 app.get("/messages", async (req, res) => {
 
+        const limit = parseInt(req.query.limit);
+
+        try {
+
+            const messages = await db.collection("messages").find().toArray();
+            res.send(messages);
+        } catch (error) {
+            console.log(error.message);
+            res.sendStatus(500);
+        }
 });
 
 app.post("/participants", async (req, res) => {
@@ -49,6 +59,22 @@ app.post("/participants", async (req, res) => {
 app.post("/messages", async (req, res) => {
 
     const {to, text, type} = req.body; //string não vazias, type só pode ser ´message'ou 'private-message'
+    const {User} = req.header;
+
+
+    try {
+        const response = await db.collection('messages').insertOne(
+            {
+                from: User,
+                to,
+                text,
+                type
+            });
+        res.sendStatus(201);
+    } catch (error) {
+        console.log(error.message);
+        res.sendStatus(422);
+    }
 });
 
 app.listen(5000, () => {
