@@ -48,8 +48,7 @@ app.get("/messages", async (req, res) => {
 
             try {
                 const messages = await db.collection("messages").find().toArray();
-                messages.slice(-limit);
-                res.send(messages);
+                res.send(messages.slice(-limit));
             } catch (error) {
                 console.log(error.message);
                 res.sendStatus(500);
