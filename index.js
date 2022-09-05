@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { MongoClient } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 import dayjs from 'dayjs';
 import joi from 'joi';
 import dotenv from 'dotenv';
@@ -19,6 +19,8 @@ mongoClient.connect(()=> {
     db = mongoClient.db('batepapouol')
 });
 
+const timeNow = dayjs().format('HH:mm:ss');
+
 const participantsSchema = joi.object({
     name: joi.string().required()
 });
@@ -28,6 +30,7 @@ const messageSchema = joi.object({
     text: joi.string().required(),
     type: joi.string().valid('message', 'private-message').required()
 });
+
 
 app.get("/participants", async (req, res) => {
 
@@ -81,7 +84,9 @@ app.post("/participants", async (req, res) => {
     
     try {
         const response = await db.collection('participants').insertOne({name, lastStatus});
+        const response2 = await db.collection('messages').insertOne({from: name, to: "Todos", text: "entra na sala...", type: "status", time: timeNow})
         res.sendStatus(201);
+        console.log(response2)
     } catch (error) {
         console.log(error.message);
         res.sendStatus(422);
@@ -92,20 +97,12 @@ app.post("/messages", async (req, res) => {
 
     const {to, text, type} = req.body; 
     const user = req.headers.user;
-    const timeNow = dayjs().format('HH:mm:ss');
 
     const validation = messageSchema.validate(req.body, {abortEarly: false});
-
-    const validFrom = db.collection('participants').findOne({name: user});
 
     if (validation.error) {
         const errors = validation.error.details.map( detail => detail.message);
         res.status(422).send(errors);
-        return;
-    }
-
-    if (!validFrom) {
-        res.status(422);
         return;
     }
 
@@ -123,6 +120,30 @@ app.post("/messages", async (req, res) => {
         console.log(error.message);
         res.sendStatus(422);
     }
+});
+
+app.post("/status", async (req, res) => {
+    const user = req.headers.user;
+
+    const updatedUser = {
+        name: user,
+        lastStatus: Date.now()
+    };
+
+    try {
+        const participants = await db.collection('participants').find().toArray();
+        const validUser = participants.find(valid => valid.name === user);
+        if (!validUser) {
+            res.sendStatus(404);
+            return;
+        }
+        const update = await db.collection('participants').updateOne({_id: ObjectId(validUser._id)}, {$set: updatedUser});
+    } catch (error) {
+        console.log(error.message);
+        res.sendStatus(500);
+    }
+
+
 });
 
 app.listen(5000, () => {
